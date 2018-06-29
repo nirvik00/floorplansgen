@@ -2,7 +2,8 @@ import rhinoscriptsyntax as rs
 import operator
 from operator import itemgetter
 import math
-from func_obj_file import func_obj
+from ns_func_obj_file import func_obj
+
 class read_obj(object):
     def __init__(self):     
         self.func_obj_li=[]
@@ -10,7 +11,6 @@ class read_obj(object):
         filename='function_obj.csv'
         with open(filename, "r") as file:
             x=file.readlines()      
-            print(x)
         file.close()    
         obj_li=[]
         k=-1
@@ -24,12 +24,7 @@ class read_obj(object):
                 self.func_obj_li.append([k,nm,ar])
                 
     def return_obj(self):    
-        for i in self.func_obj_li:
-            print(i[0], i[1], i[2])
         self.func_obj_li.sort(key=operator.itemgetter(2))
-        print("\n\n\n")
-        for i in self.func_obj_li:
-            print(i[0],i[1],i[2])
         return self.func_obj_li
 
 
