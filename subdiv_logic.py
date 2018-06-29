@@ -5,18 +5,21 @@ import operator
 from operator import itemgetter
 
 
-class pt_obj(object):
-    def __init__(self,id,x,y):
-        self.id=id
-        self.x=x
-        self.y=y
-
 class subdiv(object):
     def __init__(self, site_poly):
         self.site_poly=site_poly
-        self.get_segment(self.site_poly)
         
-    def get_segment(self,poly):
+        
+        self.main_counter=0
+        self.max_recursion=8
+        self.get_segment(self.site_poly,0)
+        
+        #print('number of recursions= %s'%(self.main_counter))
+        
+    def get_segment(self,poly,rec_counter):
+        #rec_counter
+        rec_counter+=1
+        self.main_counter+=1
         #1. create segments of poly
         poly_pts=rs.CurvePoints(poly)
         poly_pt_li=[]
@@ -28,12 +31,14 @@ class subdiv(object):
         for i in range(len(poly_pts)-1):
             a=poly_pts[i]
             b=poly_pts[i+1]
+            d=rs.Distance(a,b)
             if(rs.Distance(a,b)>0.1):
-                seg_li.append([a,b])
+                seg_li.append([a,b,d])
         
         #2. choose the segment
+        seg_li.sort(key=operator.itemgetter(2))
         L=random.choice(seg_li)
-
+        
         #3. get point on the segment
         p=[(L[0][0]+L[1][0])/2,(L[0][1]+L[1][1])/2,0]
         
@@ -52,22 +57,21 @@ class subdiv(object):
         
         #5. find intersection with poly
         intx=rs.CurveCurveIntersection(M,poly)
-        split_pts=[intx[0][1],intx[1][1]]
-        
-        for i in split_pts:
-            print(i)
-        print('\n')
-        
+        split_pts=[intx[0][1],intx[1][1]]        
         rs.DeleteObject(M)
         
         #6. organize the indices to include splitting points
         split_pt_li=[]
+        ids=[]
+        split_ids=[]
+        for i in range(len(poly_pt_li)):
+            ids.append(i)
+            split_pt_li.append(poly_pt_li[i])
         for i in range(len(poly_pt_li)-1):
             a=poly_pt_li[i][0]
             b=poly_pt_li[i+1][0]
             a_id=poly_pt_li[i][1]
             b_id=poly_pt_li[i+1][1]
-            print(a_id, b_id)
             norm1=rs.Distance(a,b)
             u=[(b[0]-a[0]),(b[1]-a[1]),0]
             for c in split_pts:
@@ -81,46 +85,82 @@ class subdiv(object):
                 if(d<1):
                     id=(a_id+b_id)/2
                     split_pt_li.append([c,id])
-                    print(id)
-        
-        split_pt_li.sort(key=operator.itemgetter(1)) # sort the split_id
-        p=split_pt_li[0][0]
-        q=split_pt_li[1][0]        
-        p_id=split_pt_li[0][1]
-        q_id=split_pt_li[1][1]        
+                    ids.append(id)
+                    split_ids.append(id)
+        ids.sort()
+        split_ids.sort()
+        p=split_ids[0]
+        q=split_ids[1]
+        split_pt_li.sort(key=operator.itemgetter(1)) # sort the split_id       
+        pt_p=None
+        for i in split_pt_li:
+            pt=i[0]
+            id=i[1]
+            if(id==p):
+                pt_p=pt
+        pt_q=None
+        for i in split_pt_li:
+            pt=i[0]
+            id=i[1]
+            if(id==q):
+                pt_q=pt
         
         # 7. Construct the polygons
+        # 7a. first polygon
+        ids_1=ids[int(p+0.5):int(q+0.5)+1]
         poly_1_pts=[]
-        poly_1_pts.append(split_pt_li[0])
-        X=poly_pt_li[int(math.ceil(p_id)):int(math.floor(q_id))+1]
-        for i in X:
-            poly_1_pts.append(i)
-        poly_1_pts.append(split_pt_li[1])
-        poly_1_pts.append(split_pt_li[0])
-        
-        poly1=[]
-        for i in poly_1_pts:
-            print('pt: ',i[0])
-            rs.AddPoint(i[0])
-            poly1.append(i[0])
-        poly1x=rs.AddPolyline(poly1)
-        
-        poly_2_pts=[]
-        Y=poly_pt_li[:int(math.ceil(p_id))]#last index not included
-        poly_2_pts.append(split_pt_li[1])
-        Z=Y+poly_pt_li[int(math.ceil(q_id)):-1]
-        for i in Z:
-            poly_2_pts.append(i)
-        poly_2_pts.append(split_pt_li[1])
-        poly2=[]
         k=-1
-        for i in poly_2_pts:
+        for i in ids_1:
             k+=1
-            poly2.append(i[0])
-        poly2x=rs.AddPolyline(poly2)
+            for j in split_pt_li:
+                pt=j[0]
+                id=j[1]
+                if(id==i):
+                    poly_1_pts.append(pt)
+        poly_1_pts.append(pt_q)
+        poly_1_pts.append(pt_p)
         
-        rs.CopyObject(poly1x,[0,0,50])
-        rs.CopyObject(poly2x,[0,0,100])
+        # 7b. second polygon
+        poly_2_pts=[]
+        poly_2_pts.append(pt_p)
+        poly_2_pts.append(pt_q)
+        for j in split_pt_li:
+            pt=j[0]
+            id=j[1]
+            if(id>q):
+                if(pt not in poly_2_pts):
+                    poly_2_pts.append(pt)
+        for j in split_pt_li:
+            pt=j[0]
+            id=j[1]
+            if(id<p):
+                if(pt not in poly_2_pts):
+                    poly_2_pts.append(pt)    
+        poly_2_pts.append(pt_p)
         
+        #8. Continue the recursion
+        try:
+            poly1=rs.AddPolyline(poly_1_pts)     
+            poly2=rs.AddPolyline(poly_2_pts)
+            rs.DeleteObject(poly)
+            #if(self.main_counter<3):
+            if(rec_counter<3):
+                self.get_segment(poly1,rec_counter)
+                self.get_segment(poly2,rec_counter)
+        except:
+            pass
+        
+        
+rs.EnableRedraw(False)
 SITE=rs.GetObject("Pick site curve ")
-subdiv(SITE)
+b=rs.BoundingBox(SITE)
+x=rs.Distance(b[0],b[1])
+y=rs.Distance(b[1],b[2])
+a=10
+b=3
+for i in range(a):
+    for j in range(b):
+        siteX=rs.CopyObject(SITE,[i*(1.5*x),j*(1.25*y),0])
+        subdiv(siteX)
+
+rs.EnableRedraw(True)
